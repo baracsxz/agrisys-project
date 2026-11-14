@@ -1,0 +1,442 @@
+-- reset existing tables cleanly
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+
+-- 1. role lookup table
+CREATE TABLE role (
+    role_id SERIAL PRIMARY KEY,
+    role_name VARCHAR(30) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO role (role_name, description) VALUES
+('admin', 'full system administrator'),
+('staff', 'agricultural technician and data encoder');
+
+-- 2. app_user table
+CREATE TABLE app_user (
+    user_id SERIAL PRIMARY KEY,
+    role_id INT NOT NULL REFERENCES role(role_id) ON DELETE RESTRICT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- insert default admin user (username: admin, password: password123)
+INSERT INTO app_user (role_id, username, password) VALUES
+(1, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
+
+-- 3. farmer table (contact_number made nullable to support web form submissions)
+CREATE TABLE farmer (
+    farmer_id SERIAL PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    contact_number VARCHAR(20),
+    address VARCHAR(150) NOT NULL,
+    date_registered DATE NOT NULL DEFAULT CURRENT_DATE CHECK (date_registered <= CURRENT_DATE),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. farmer_contact table (1-to-many normalization for multivalued contact_number)
+CREATE TABLE farmer_contact (
+    contact_id SERIAL PRIMARY KEY,
+    farmer_id INT NOT NULL REFERENCES farmer(farmer_id) ON DELETE CASCADE,
+    contact_type VARCHAR(20) DEFAULT 'Mobile',
+    contact_number VARCHAR(20) NOT NULL
+);
+
+-- 5. farm table
+CREATE TABLE farm (
+    farm_id SERIAL PRIMARY KEY,
+    farmer_id INT NOT NULL REFERENCES farmer(farmer_id) ON DELETE RESTRICT,
+    farm_name VARCHAR(100) NOT NULL,
+    location VARCHAR(150) NOT NULL,
+    area_hectares NUMERIC(8,2) NOT NULL CHECK (area_hectares > 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. soil_type lookup table
+CREATE TABLE soil_type (
+    soil_id SERIAL PRIMARY KEY,
+    soil_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO soil_type (soil_name, description) VALUES
+('Loam', 'balanced sand, silt, and clay'),
+('Clay Loam', 'nutrient-rich soil with good water retention'),
+('Sandy Loam', 'well-draining fertile soil'),
+('Clay', 'heavy moisture-retaining soil');
+
+-- 7. farm_soil associative table (many-to-many: farm <-> soil_type)
+CREATE TABLE farm_soil (
+    farm_id INT NOT NULL REFERENCES farm(farm_id) ON DELETE CASCADE,
+    soil_id INT NOT NULL REFERENCES soil_type(soil_id) ON DELETE RESTRICT,
+    PRIMARY KEY (farm_id, soil_id)
+);
+
+-- 8. irrigation_type lookup table
+CREATE TABLE irrigation_type (
+    irrigation_id SERIAL PRIMARY KEY,
+    irrigation_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO irrigation_type (irrigation_name, description) VALUES
+('Rainfed', 'relies solely on rainfall'),
+('Irrigated', 'supplied via canal or surface water system'),
+('Drip Irrigation', 'targeted root-zone watering');
+
+-- 9. farm_irrigation associative table (many-to-many: farm <-> irrigation_type)
+CREATE TABLE farm_irrigation (
+    farm_id INT NOT NULL REFERENCES farm(farm_id) ON DELETE CASCADE,
+    irrigation_id INT NOT NULL REFERENCES irrigation_type(irrigation_id) ON DELETE RESTRICT,
+    PRIMARY KEY (farm_id, irrigation_id)
+);
+
+-- 10. crop_category lookup table
+CREATE TABLE crop_category (
+    category_id SERIAL PRIMARY KEY,
+    category_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO crop_category (category_name, description) VALUES
+('Cereal', 'rice, corn, and staple grains'),
+('Vegetable', 'leafy, root, and fruiting vegetables'),
+('Fruit', 'orchard and tropical fruit crops'),
+('Legume', 'beans, peanuts, and nitrogen-fixing crops'),
+('Root Crop', 'cassava, sweet potato, and tubers');
+
+-- 11. crop table
+CREATE TABLE crop (
+    crop_id SERIAL PRIMARY KEY,
+    category_id INT NOT NULL REFERENCES crop_category(category_id) ON DELETE RESTRICT,
+    crop_name VARCHAR(80) NOT NULL,
+    variety VARCHAR(80) NOT NULL,
+    growing_period_days INT NOT NULL CHECK (growing_period_days > 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. season lookup table
+CREATE TABLE season (
+    season_id SERIAL PRIMARY KEY,
+    season_name VARCHAR(30) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO season (season_name, description) VALUES
+('Wet Season', 'rainy months suitable for water-intensive crops'),
+('Dry Season', 'sunny months requiring scheduled irrigation'),
+('Year Round', 'can be cultivated throughout the year');
+
+-- 13. crop_season associative table (many-to-many: crop <-> season)
+CREATE TABLE crop_season (
+    crop_id INT NOT NULL REFERENCES crop(crop_id) ON DELETE CASCADE,
+    season_id INT NOT NULL REFERENCES season(season_id) ON DELETE RESTRICT,
+    PRIMARY KEY (crop_id, season_id)
+);
+
+-- 14. planting_status lookup table
+CREATE TABLE planting_status (
+    status_id SERIAL PRIMARY KEY,
+    status_name VARCHAR(30) NOT NULL UNIQUE
+);
+
+INSERT INTO planting_status (status_name) VALUES
+('Growing'),
+('Harvested'),
+('Damaged'),
+('Cancelled');
+
+-- 15. planting table
+CREATE TABLE planting (
+    planting_id SERIAL PRIMARY KEY,
+    farm_id INT NOT NULL REFERENCES farm(farm_id) ON DELETE RESTRICT,
+    crop_id INT NOT NULL REFERENCES crop(crop_id) ON DELETE RESTRICT,
+    status_id INT NOT NULL DEFAULT 1 REFERENCES planting_status(status_id) ON DELETE RESTRICT,
+    planting_date DATE NOT NULL CHECK (planting_date <= CURRENT_DATE),
+    area_planted NUMERIC(8,2) NOT NULL CHECK (area_planted > 0),
+    seed_quantity NUMERIC(8,2) NOT NULL CHECK (seed_quantity > 0),
+    expected_harvest_date DATE NOT NULL CHECK (expected_harvest_date >= planting_date),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. quality_grade lookup table
+CREATE TABLE quality_grade (
+    grade_id SERIAL PRIMARY KEY,
+    grade_name VARCHAR(30) NOT NULL UNIQUE,
+    description TEXT
+);
+
+INSERT INTO quality_grade (grade_name, description) VALUES
+('Grade A', 'premium export or top market quality'),
+('Grade B', 'standard commercial quality'),
+('Grade C', 'acceptable processing or local market grade');
+
+-- 17. harvest_remark lookup table
+CREATE TABLE harvest_remark (
+    remark_id SERIAL PRIMARY KEY,
+    remark_description VARCHAR(200) NOT NULL UNIQUE
+);
+
+INSERT INTO harvest_remark (remark_description) VALUES
+('High quality harvest'),
+('Good harvest'),
+('Acceptable quality'),
+('Low Yield'),
+('Poor Quality'),
+('Damaged Harvest');
+
+-- 18. harvest table
+CREATE TABLE harvest (
+    harvest_id SERIAL PRIMARY KEY,
+    planting_id INT NOT NULL REFERENCES planting(planting_id) ON DELETE RESTRICT,
+    grade_id INT NOT NULL REFERENCES quality_grade(grade_id) ON DELETE RESTRICT,
+    remark_id INT NOT NULL REFERENCES harvest_remark(remark_id) ON DELETE RESTRICT,
+    harvest_date DATE NOT NULL,
+    quantity_kg NUMERIC(10,2) NOT NULL CHECK (quantity_kg > 0),
+    selling_price_per_kg NUMERIC(10,2) NOT NULL CHECK (selling_price_per_kg >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+--------------------------------------------------------------------------------
+-- AUTOMATIC LOWEST-ID FILLING TRIGGERS
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION assign_lowest_farmer_id() 
+RETURNS TRIGGER AS $$
+DECLARE next_id INT;
+  BEGIN
+    SELECT COALESCE(MIN(t1.farmer_id + 1), 1) INTO next_id FROM farmer t1 WHERE NOT EXISTS (SELECT 1 FROM farmer t2 WHERE t2.farmer_id = t1.farmer_id + 1) AND t1.farmer_id >= 1;
+    IF NOT EXISTS (SELECT 1 FROM farmer) THEN NEW.farmer_id := 1;
+    ELSE
+        IF (SELECT MIN(farmer_id) FROM farmer) > 1 THEN NEW.farmer_id := 1;
+        ELSE NEW.farmer_id := next_id; END IF;
+    END IF;
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_fill_farmer_id BEFORE INSERT ON farmer FOR EACH ROW EXECUTE FUNCTION assign_lowest_farmer_id();
+
+CREATE OR REPLACE FUNCTION assign_lowest_farm_id() 
+RETURNS TRIGGER AS $$
+DECLARE next_id INT;
+  BEGIN
+    SELECT COALESCE(MIN(t1.farm_id + 1), 1) INTO next_id FROM farm t1 WHERE NOT EXISTS (SELECT 1 FROM farm t2 WHERE t2.farm_id = t1.farm_id + 1) AND t1.farm_id >= 1;
+    IF NOT EXISTS (SELECT 1 FROM farm) THEN NEW.farm_id := 1;
+    ELSE
+        IF (SELECT MIN(farm_id) FROM farm) > 1 THEN NEW.farm_id := 1;
+        ELSE NEW.farm_id := next_id; END IF;
+    END IF;
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_fill_farm_id BEFORE INSERT ON farm FOR EACH ROW EXECUTE FUNCTION assign_lowest_farm_id();
+
+CREATE OR REPLACE FUNCTION assign_lowest_crop_id() 
+RETURNS TRIGGER AS $$
+DECLARE next_id INT;
+  BEGIN
+    SELECT COALESCE(MIN(t1.crop_id + 1), 1) INTO next_id FROM crop t1 WHERE NOT EXISTS (SELECT 1 FROM crop t2 WHERE t2.crop_id = t1.crop_id + 1) AND t1.crop_id >= 1;
+    IF NOT EXISTS (SELECT 1 FROM crop) THEN NEW.crop_id := 1;
+    ELSE
+        IF (SELECT MIN(crop_id) FROM crop) > 1 THEN NEW.crop_id := 1;
+        ELSE NEW.crop_id := next_id; END IF;
+    END IF;
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_fill_crop_id BEFORE INSERT ON crop FOR EACH ROW EXECUTE FUNCTION assign_lowest_crop_id();
+
+CREATE OR REPLACE FUNCTION assign_lowest_planting_id() 
+RETURNS TRIGGER AS $$
+DECLARE next_id INT;
+  BEGIN
+    SELECT COALESCE(MIN(t1.planting_id + 1), 1) INTO next_id FROM planting t1 WHERE NOT EXISTS (SELECT 1 FROM planting t2 WHERE t2.planting_id = t1.planting_id + 1) AND t1.planting_id >= 1;
+    IF NOT EXISTS (SELECT 1 FROM planting) THEN NEW.planting_id := 1;
+    ELSE
+        IF (SELECT MIN(planting_id) FROM planting) > 1 THEN NEW.planting_id := 1;
+        ELSE NEW.planting_id := next_id; END IF;
+    END IF;
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_fill_planting_id BEFORE INSERT ON planting FOR EACH ROW EXECUTE FUNCTION assign_lowest_planting_id();
+
+CREATE OR REPLACE FUNCTION assign_lowest_harvest_id() 
+RETURNS TRIGGER AS $$
+DECLARE next_id INT;
+  BEGIN
+    SELECT COALESCE(MIN(t1.harvest_id + 1), 1) INTO next_id FROM harvest t1 WHERE NOT EXISTS (SELECT 1 FROM harvest t2 WHERE t2.harvest_id = t1.harvest_id + 1) AND t1.harvest_id >= 1;
+    IF NOT EXISTS (SELECT 1 FROM harvest) THEN NEW.harvest_id := 1;
+    ELSE
+        IF (SELECT MIN(harvest_id) FROM harvest) > 1 THEN NEW.harvest_id := 1;
+        ELSE NEW.harvest_id := next_id; END IF;
+    END IF;
+    RETURN NEW;
+  END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_fill_harvest_id BEFORE INSERT ON harvest FOR EACH ROW EXECUTE FUNCTION assign_lowest_harvest_id();
+
+
+--------------------------------------------------------------------------------
+-- DATA INSERTION & SEEDING
+--------------------------------------------------------------------------------
+
+-- 2. INSERT 15 FARMERS
+INSERT INTO farmer (first_name, last_name, contact_number, address, date_registered) VALUES
+('Juan', 'Dela Cruz', '09171234567', 'Cebu City', '2026-10-26'),
+('Maria', 'Santos', '09181234567', 'Carcar City, Cebu', '2026-10-26'),
+('Pedro', 'Reyes', '09191234567', 'Danao City, Cebu', '2026-10-26'),
+('Ana', 'Garcia', '09201234567', 'Argao, Cebu', '2026-10-26'),
+('Jose', 'Mendoza', '09211234567', 'Bogo City, Cebu', '2026-10-26'),
+('Ramon', 'Flores', '09221234567', 'Toledo City, Cebu', '2026-10-26'),
+('Elena', 'Cruz', '09231234567', 'Naga City, Cebu', '2026-10-26'),
+('Antonio', 'Lim', '09241234567', 'Minglanilla, Cebu', '2026-10-26'),
+('Rosa', 'Fernandez', '09251234567', 'Liloan, Cebu', '2026-10-26'),
+('Mario', 'Villanueva', '09261234567', 'Compostela, Cebu', '2026-10-26'),
+('Teresa', 'Navarro', '09271234567', 'Talisay City, Cebu', '2026-10-26'),
+('Carlos', 'Ramos', '09281234567', 'Consolacion, Cebu', '2026-10-26'),
+('Liza', 'Torres', '09291234567', 'Dalaguete, Cebu', '2026-10-26'),
+('Roberto', 'Castillo', '09301234567', 'Barili, Cebu', '2026-10-26'),
+('Susan', 'Aquino', '09311234567', 'Sibonga, Cebu', '2026-10-26');
+
+-- Populate farmer_contact table
+INSERT INTO farmer_contact (farmer_id, contact_type, contact_number)
+SELECT farmer_id, 'Mobile', contact_number FROM farmer WHERE contact_number IS NOT NULL;
+
+
+-- 3. INSERT 15 FARMS
+INSERT INTO farm (farmer_id, farm_name, location, area_hectares) VALUES
+(1, 'Dela Cruz Farm', 'Cebu City', 2.50),
+(2, 'Santos Rice Farm', 'Carcar City, Cebu', 4.20),
+(3, 'Reyes Agricultural Farm', 'Danao City, Cebu', 3.80),
+(4, 'Garcia Vegetable Farm', 'Argao, Cebu', 1.75),
+(5, 'Mendoza Farm', 'Bogo City, Cebu', 5.00),
+(6, 'Flores Corn Farm', 'Toledo City, Cebu', 3.40),
+(7, 'Cruz Family Farm', 'Naga City, Cebu', 2.80),
+(8, 'Lim Agricultural Farm', 'Minglanilla, Cebu', 2.25),
+(9, 'Fernandez Farm', 'Liloan, Cebu', 3.10),
+(10, 'Villanueva Green Farm', 'Compostela, Cebu', 4.50),
+(11, 'Navarro Rice Field', 'Talisay City, Cebu', 3.75),
+(12, 'Ramos Farm', 'Consolacion, Cebu', 2.60),
+(13, 'Torres Vegetable Farm', 'Dalaguete, Cebu', 1.80),
+(14, 'Castillo Agricultural Farm', 'Barili, Cebu', 5.50),
+(15, 'Aquino Farm', 'Sibonga, Cebu', 3.20);
+
+-- Populate farm_soil associative table
+INSERT INTO farm_soil (farm_id, soil_id)
+SELECT f.farm_id, 
+       CASE (f.farm_id % 4) 
+           WHEN 1 THEN (SELECT soil_id FROM soil_type WHERE soil_name = 'Loam')
+           WHEN 2 THEN (SELECT soil_id FROM soil_type WHERE soil_name = 'Clay Loam')
+           WHEN 3 THEN (SELECT soil_id FROM soil_type WHERE soil_name = 'Sandy Loam')
+           ELSE (SELECT soil_id FROM soil_type WHERE soil_name = 'Clay')
+       END
+FROM farm f;
+
+-- Populate farm_irrigation associative table
+INSERT INTO farm_irrigation (farm_id, irrigation_id)
+SELECT f.farm_id, 
+       CASE (f.farm_id % 3) 
+           WHEN 1 THEN (SELECT irrigation_id FROM irrigation_type WHERE irrigation_name = 'Rainfed')
+           WHEN 2 THEN (SELECT irrigation_id FROM irrigation_type WHERE irrigation_name = 'Irrigated')
+           ELSE (SELECT irrigation_id FROM irrigation_type WHERE irrigation_name = 'Drip Irrigation')
+       END
+FROM farm f;
+
+
+-- 4. INSERT 10 CROPS
+INSERT INTO crop (category_id, crop_name, variety, growing_period_days) VALUES
+(1, 'Rice', 'NSIC Rc 222', 115),
+(1, 'Corn', 'Yellow Corn', 100),
+(2, 'Tomato', 'Diamante Max', 90),
+(2, 'Eggplant', 'Morena', 100),
+(3, 'Banana', 'Lakatan', 300),
+(3, 'Mango', 'Carabao', 150),
+(4, 'Peanut', 'BPI Pn 9', 110),
+(5, 'Cassava', 'Golden Yellow', 240),
+(5, 'Sweet Potato', 'NSIC Sp 30', 120),
+(3, 'Watermelon', 'Sweet 16', 85);
+
+-- Populate crop_season associative table
+INSERT INTO crop_season (crop_id, season_id)
+SELECT c.crop_id, 
+       CASE (c.crop_id % 3)
+           WHEN 1 THEN (SELECT season_id FROM season WHERE season_name = 'Wet Season')
+           WHEN 2 THEN (SELECT season_id FROM season WHERE season_name = 'Dry Season')
+           ELSE (SELECT season_id FROM season WHERE season_name = 'Year Round')
+       END
+FROM crop c;
+
+
+-- 5. INSERT 28 PLANTING RECORDS
+INSERT INTO planting (farm_id, crop_id, status_id, planting_date, area_planted, seed_quantity, expected_harvest_date) VALUES
+(1,  1, 2, '2026-02-01', 0.60, 25.00, '2026-05-27'),
+(2,  2, 2, '2026-02-04', 0.70, 30.00, '2026-05-15'),
+(3,  3, 2, '2026-02-07', 0.80, 35.00, '2026-05-08'),
+(4,  4, 2, '2026-02-10', 0.90, 40.00, '2026-05-21'),
+(5,  5, 2, '2026-02-13', 1.00, 45.00, '2026-12-10'),
+(6,  6, 2, '2026-02-16', 1.10, 20.00, '2026-07-16'),
+(7,  7, 2, '2026-02-19', 1.20, 25.00, '2026-06-10'),
+(8,  8, 2, '2026-02-22', 1.30, 30.00, '2026-10-20'),
+(9,  9, 2, '2026-02-25', 1.40, 35.00, '2026-06-25'),
+(10, 10, 2, '2026-02-28', 0.50, 40.00, '2026-05-24'),
+(11, 1,  2, '2026-03-03', 0.60, 45.00, '2026-06-26'),
+(12, 2,  2, '2026-03-06', 0.70, 20.00, '2026-06-14'),
+(13, 3,  2, '2026-03-09', 0.80, 25.00, '2026-06-07'),
+(14, 4,  2, '2026-03-12', 0.90, 30.00, '2026-06-20'),
+(15, 5,  2, '2026-03-15', 1.00, 35.00, '2026-11-09'),
+(1,  6,  2, '2026-03-18', 1.10, 40.00, '2026-08-15'),
+(2,  7,  2, '2026-03-21', 1.20, 45.00, '2026-07-09'),
+(3,  8,  2, '2026-03-24', 1.30, 20.00, '2026-11-19'),
+(4,  9,  2, '2026-03-27', 1.40, 25.00, '2026-07-25'),
+(5,  10, 2, '2026-03-30', 0.50, 30.00, '2026-06-23'),
+(6,  1,  1, '2026-04-02', 0.60, 35.00, '2026-07-26'),
+(7,  2,  1, '2026-04-05', 0.70, 40.00, '2026-07-14'),
+(8,  3,  1, '2026-04-08', 0.80, 45.00, '2026-07-07'),
+(9,  4,  1, '2026-04-11', 0.90, 20.00, '2026-07-20'),
+(10, 5,  1, '2026-04-14', 1.00, 25.00, '2026-08-08'),
+(11, 6,  1, '2026-04-17', 1.10, 30.00, '2026-09-14'),
+(12, 7,  1, '2026-04-20', 1.20, 35.00, '2026-08-08'),
+(13, 8,  1, '2026-04-23', 1.30, 40.00, '2026-12-19');
+
+
+-- =====================================================
+-- 6. INSERT 20 HARVEST RECORDS
+-- =====================================================
+INSERT INTO harvest (planting_id, grade_id, remark_id, harvest_date, quantity_kg, selling_price_per_kg) VALUES
+(1,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-05-27',  900.00, 22.00),
+(2,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-05-15', 1025.00, 25.50),
+(3,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-05-08', 1150.00, 29.00),
+(4,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-05-21', 1275.00, 32.50),
+(5,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-12-10', 1400.00, 36.00),
+(6,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-07-16', 1525.00, 39.50),
+(7,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-06-10', 1650.00, 43.00),
+(8,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-10-20', 1775.00, 46.50),
+(9,  (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-06-25', 1900.00, 22.00),
+(10, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-05-24', 2025.00, 25.50),
+(11, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-06-26', 2150.00, 29.00),
+(12, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-06-14', 2275.00, 32.50),
+(13, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-06-07', 2400.00, 36.00),
+(14, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-06-20', 2525.00, 39.50),
+(15, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-11-09', 2650.00, 43.00),
+(16, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-08-15', 2775.00, 46.50),
+(17, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-07-09', 2900.00, 22.00),
+(18, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade C'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Acceptable quality'), '2026-11-19', 3025.00, 25.50),
+(19, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade A'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'High quality harvest'), '2026-07-25', 3150.00, 29.00),
+(20, (SELECT grade_id FROM quality_grade WHERE grade_name = 'Grade B'), (SELECT remark_id FROM harvest_remark WHERE remark_description = 'Good harvest'), '2026-06-23', 3275.00, 32.50);

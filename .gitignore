@@ -1,0 +1,13 @@
+#Sensitive configuration and environment files
+.env
+config/Database.php
+
+#Operating system generated files
+.DS_Store
+Thumbs.db
+
+#Text editor / IDE workspace files
+*.sublime-project
+*.sublime-workspace
+.vscode/
+.idea/

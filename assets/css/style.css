@@ -1,0 +1,101 @@
+body {
+    background-color: #f8f9fa;
+    overflow-x: hidden;
+}
+
+/*sidebar styling*/
+#sidebar {
+    width: 260px;
+    min-height: 100vh;
+    background-color: #134e32;
+    color: #fff;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: left 0.3s ease;
+}
+
+#sidebar .brand-area {
+    padding: 20px;
+    background-color: #0f3e28;
+}
+
+#sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.8);
+    padding: 12px 20px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+#sidebar .nav-link:hover, 
+#sidebar .nav-link.active {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#sidebar .section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 15px 20px 5px 20px;
+}
+
+/*main content wrapper shifted to accommodate fixed sidebar*/
+#main-content {
+    margin-left: 260px;
+    padding: 30px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* ========================================= */
+/* MOBILE RESPONSIVE STYLES & OVERLAY         */
+/* ========================================= */
+
+body.sidebar-open {
+    overflow: hidden; /*prevent body scrolling when mobile menu is open*/
+}
+
+body.sidebar-open::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5); /*dark transparent backdrop*/
+    z-index: 1065; /*sits right below sidebar (1070), above mobile header*/
+}
+
+@media (max-width: 991.98px) {
+    #sidebar {
+        width: 280px;
+        position: fixed;
+        top: 0;
+        height: 100vh;
+        left: -280px; /*hidden off-screen by default */
+        z-index: 1070; /*higher than mobile header (1060) to prevent overlap blocks*/
+        transition: left 0.3s ease;
+    }
+
+    /*class toggled via JS to slide the sidebar in*/
+    #sidebar.show {
+        left: 0;
+    }
+
+    #main-content {
+        margin-left: 0;
+        padding: 15px;
+        padding-top: 70px; /*clears sticky mobile header bar*/
+    }
+}
