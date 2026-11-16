@@ -219,4 +219,6 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
+//sample comment as per professor
+<h4>sample push</h4>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

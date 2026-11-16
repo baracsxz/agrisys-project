@@ -33,7 +33,7 @@ if ($editId > 0 && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         $form['address']         = $farmerData['address'];
         $form['date_registered'] = $farmerData['date_registered'];
 
-        // fetch associated contact numbers for this farmer
+        //fetch associated contact numbers for this farmer
         $stmt_c = $pdo->prepare("SELECT contact_number FROM farmer_contact WHERE farmer_id = :id ORDER BY contact_id ASC");
         $stmt_c->execute(['id' => $editId]);
         $contacts = $stmt_c->fetchAll(PDO::FETCH_COLUMN);

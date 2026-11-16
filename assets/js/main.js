@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    //mdern sweetalert delete confirmation pop-up
+    //modern sweetalert delete confirmation pop-up
     document.addEventListener('click', function (e) {
         if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
             const btn = e.target.closest('.delete-btn');
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pDate.addEventListener('change', updateExpectedDate);
     }
 
-    // Dynamic farmer contact numbers addition/removal (used in farmers module)
+    //dynamic farmer contact numbers addition/removal (used in farmers module)
     const addContactBtn = document.getElementById('add-contact-btn');
     const contactList = document.getElementById('contact-list');
 
